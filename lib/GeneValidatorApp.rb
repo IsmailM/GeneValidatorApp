@@ -3,6 +3,7 @@ require 'GeneValidatorApp/genevalidator'
 require 'GeneValidatorApp/logger'
 require 'GeneValidatorApp/config'
 require 'GeneValidatorApp/version'
+require 'GeneValidatorApp/exceptions'
 require 'genevalidator/version'
 
 require 'pathname'
@@ -106,7 +107,7 @@ module GeneValidatorApp
     private
 
     def init_blast_and_mafft_binaries
-      init_binaries(config[:blast_bin], 'NCBI BLAST+')
+      init_binaries(config[:blast_bin], 'BLAST')
       assert_blast_installed_and_compatible
       init_binaries(config[:mafft_bin], 'Mafft')
       assert_mafft_installed
@@ -116,7 +117,8 @@ module GeneValidatorApp
       if bin_dir
         bin_dir = File.expand_path bin_dir
         unless File.exist?(bin_dir) && File.directory?(bin_dir)
-          fail BIN_DIR_NOT_FOUND, bin_dir
+          fail BLAST_BIN_DIR_NOT_FOUND, bin_dir if type == 'BLAST'
+          fail MAFFT_BIN_DIR_NOT_FOUND, bin_dir if type == 'Mafft'
         end
         logger.debug("Will use #{type} at: #{config[:blast_bin]}")
         export_bin_dir bin_dir
