@@ -1,312 +1,180 @@
-#!/usr/bin/env ruby
-require 'slop'
+# This file defines all possible exceptions that can be thrown by
+# GeneValidatorApp on startup.
+#
+# Exceptions only ever inform another entity (downstream code or users) of an
+# issue. Exceptions may or may not be recoverable.
+#
+# Error classes should be seen as: the error code (class name), human readable
+# message (to_s method), and necessary attributes to act on the error.
+#
+# We define as many error classes as needed to be precise about the issue, thus
+# making it easy for downstream code (bin/sequenceserver or config.ru) to act
+# on them.
 
-ENV['RACK_ENV'] ||= 'production'
-
-# display name for tools like `ps`
-$PROGRAM_NAME = 'genevalidatorapp'
-
-opts = Slop.parse do |o|
-  o.banner = <<BNR
-
-SUMMARY:
-  GeneValidator - Identify problems with predicted genes
-
-USAGE:
-  $ genevalidatorapp [options]
-
-Examples:
-  # Launch GeneValidatorApp with the given config file
-  $ genevalidatorapp --config ~/.genevalidatorapp.conf
-
-  # Launch GeneValidatorApp with 8 threads at port 8888
-  $ genevalidatorapp --num_threads 8 --port 8888
-
-  # Create a config file with the other arguments
-  $ genevalidatorapp -s -d ~/database_dir
-BNR
-
-  o.separator 'Compulsory Argument, unless set in a config file'
-
-  o.string '-d', '--database_dir',
-           'Read BLAST database from this directory'
-
-  o.separator ''
-  o.separator 'Optional Arguments'
-
-  o.string '-f', '--default_db',
-           'The Path to the the default database'
-
-  o.string '-n', '--num_threads',
-           'Number of threads to use to run a BLAST search'
-
-  o.string '-c', '--config_file',
-           'Use the given configuration file'
-
-  o.string '-r', '--require'
-           'Load extension from this file'
-
-  o.string '--host',
-           'Host to run GeneValidatorApp on'
-  
-  o.string '-p', '--port'
-           'Port to run GeneValidatorApp on'
-  
-  o.string '-s', '--set',
-           'Set configuration value in the config file'
-  
-  o.bool   '-l', '--list_dbs',
-           'List BLAST databases'
-  
-  o.string '-b', '--blast_bin',
-           'Load BLAST+ binaries from this directory'
-  
-  o.string '-m', '--mafft_bin',
-           'Load Mafft binaries from this directory'
-  
-  o.string '-w', '--web_dir',
-           'Path to the web directory (contains ' \
-           'supporting files utilised by the app).'
-
-  o.bool   '-D', '--devel'
-           'Start GeneValidatorApp in development mode'
-           
-  o.bool   '-v', '--version',
-           'Print version number of GeneValidatorApp that will be loaded' 
-
-  o.on     '-h', '--help',
-           'Display this help message'
-end
-
-if opts.help?
-  puts opts
-  exit
-end
-
-if opts.version?
-  require 'GeneValidatorApp/version'
-  puts GeneValidatorApp::VERSION
-  exit
-end
-
-ENV['RACK_ENV'] = 'development' if opts.devel?
-
-# Exit gracefully on SIGINT.
-stty = `stty -g`.chomp
-trap('INT') do
-  puts ''
-  puts 'Aborted.'
-  system('stty', stty)
-  exit
-end
-
-clean_opts = lambda do |hash|
-  hash.delete_if { |k, v| k == :set || k == :version || v.nil? }
-  hash
-end
-
-require 'GeneValidatorApp'
-require 'GeneValidatorApp/exceptions'
-begin
-  GeneValidatorApp.init clean_opts[opts.to_hash]
-
-rescue GeneValidatorApp::CONFIG_FILE_ERROR => e
-  puts e
-  exit!
-rescue GeneValidatorApp::BLAST_BIN_DIR_NOT_FOUND => e
-  puts e
-
-  unless opts.blast_bin?
-    puts 'You can set the correct value by running:'
-    puts '    $ genevalidatorapp -s -b <path_to_blast_bin>'
-  end
-
-  exit!
-rescue GeneValidatorApp::MAFFT_BIN_DIR_NOT_FOUND => e
-  puts e
-
-  unless opts.mafft_bin?
-    puts 'You can set the correct value by running:'
-    puts '    $ genevalidatorapp -s -m <path_to_mafft_bin>'
-  end
-
-  exit!
-rescue GeneValidatorApp::DATABASE_DIR_NOT_FOUND => e
-  puts e 
-
-  unless opts.database_dir?
-    puts 'You can set the correct value by running:'
-    puts
-    puts '    $ genevalidatorapp -s -d <value>'
-    puts
-  end
-
-  exit!
-rescue GeneValidatorApp::NUM_THREADS_INCORRECT => e
-  puts e 
-
-  unless opts.num_threads?
-    puts 'You can set the correct value by running:'
-    puts
-    puts '    $ genevalidatorapp -s -n <value>'
-    puts
-  end
-
-  exit!
-rescue GeneValidatorApp::EXTENSION_FILE_NOT_FOUND => e
-  puts e 
-
-  unless opts.require?
-    puts 'You can set the correct value by running:'
-    puts
-    puts '    $ genevalidatorapp -s -r <value>'
-    puts
-  end
-
-  exit!
-rescue GeneValidatorApp::BLAST_NOT_INSTALLED,
-       GeneValidatorApp::BLAST_NOT_COMPATIBLE => e
-  # Show original error message first.
-  puts
-  puts e
-
-  # Set a flag so that if we recovered from error resulting config can be
-  # saved. Config will be saved unless invoked with -b option.
-  opts.fetch_option(:set).value = !bin?
-
-  # Ask user if she already has BLAST+ downloaded or offer to download
-  # BLAST+ for her.
-  puts
-  puts <<MSG
-GeneValidatorApp can use NCBI BLAST+ that you may have on your system already, or
-download the correct package for itself. Please enter the path to NCBI BLAST+
-or press Enter to download.
-
-Press Ctrl+C to quit.
-MSG
-  puts
-  response = Readline.readline('>> ').to_s.strip
-  if response.empty?
-    puts
-    puts 'Installing NCBI BLAST+.'
-    puts "RUBY_PLATFORM #{RUBY_PLATFORM}"
-
-    version = GeneValidatorApp::MINIMUM_BLAST_VERSION
-    url = case RUBY_PLATFORM
-          when /i686-linux/   # 32 bit Linux
-            'ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/' \
-            "#{version.chop}/ncbi-blast-#{version}-ia32-linux.tar.gz"
-          when /x86_64-linux/ # 64 bit Linux
-            'ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/' \
-            "#{version.chop}/ncbi-blast-#{version}-x64-linux.tar.gz"
-          when /darwin/       # Mac
-            'ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/' \
-            "#{version.chop}/" \
-            "ncbi-blast-#{version}-universal-macosx.tar.gz"
-          else
-            puts <<ERR
-------------------------------------------------------------------------
-FAILED!! to install NCBI BLAST+.
-
-We currently support Linux and Mac only (both 32 and 64 bit). If you
-believe you are running a supported platform, please open a support
-ticket titled "#{RUBY_PLATFORM}" at:
-
-https://github.com/IsmailM/GeneValidatorApp/issues
-------------------------------------------------------------------------
-
-ERR
-          end
-
-    archive = File.join('/tmp', File.basename(url))
-    system "wget -c #{url} -O #{archive} && mkdir -p ~/.genevalidatorapp" \
-      "&& tar xvf #{archive} -C ~/.genevalidatorapp"
-    unless $?.success?
-      puts 'Failed to install BLAST+.'
-      puts '  You may need to download BLAST+ from - '
-      puts '   http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=Download'
-      puts "  Please ensure that you download BLAST+ version
-      #{GeneValidatorApp::MINIMUM_BLAST_VERSION} or higher."
-      exit!
+module GeneValidatorApp
+  # Error in config file.
+  class CONFIG_FILE_ERROR < StandardError
+    def initialize(ent, err)
+      @ent = ent
+      @err = err
     end
-    opts.fetch_option(:bin).value =
-      "~/.genevalidatorapp/ncbi-blast-#{version}/bin/"
-    retry
-  else
-    unless File.basename(response) == 'bin'
-      response = File.join(response, 'bin')
+
+    attr_reader :ent, :err
+
+    def to_s
+      <<MSG
+*** Error: There was an error in the config file: #{ent}.
+    #{err}
+
+MSG
     end
-    opts.fetch_option(:bin).value = File.join(response)
-    puts
-    retry
   end
-rescue GeneValidatorApp::DATABASE_DIR_NOT_SET => e
 
-  # Show original error message.
-  puts
-  puts e
+  ## ENOENT ##
 
-  # Set a flag so that if we recovered from error resulting config can be
-  # saved. Config will be saved unless invoked with -d option.
-  opts.fetch_option(:set).value = !database_dir?
+  # Name borrowed from standard Errno::ENOENT, this class serves as a template
+  # for defining errors that mean "expected to find <entity> at <path>, but
+  # didn't".
+  #
+  # ENOENT is raised if and only if an entity was set, either using CLI or
+  # config file. For instance, it's compulsory to set database_dir. But ENOENT
+  # is not raised if database_dir is not set. ENOENT is raised if database_dir
+  # was set, but does not exist.
+  class ENOENT < StandardError
+    def initialize(des, ent)
+      @des = des
+      @ent = ent
+    end
 
-  # Ask user for the directory containing sequences or BLAST+
-  # databases.
-  puts
-  puts <<MSG
-GeneValidatorApp needs to know where your FASTA files or BLAST+ databases are.
-Please enter the path to the relevant directory (default: current directory).
+    attr_reader :des, :ent
 
-Press Ctrl+C to quit.
+    def to_s
+      <<MSG
+*** Error: Could not find #{des}: #{ent}
+
 MSG
+    end
+  end
 
-  puts
-  response = Readline.readline('>> ').to_s.strip
-  opts.fetch_option(:database_dir).value = response
-  retry
+  # Raised if bin dir set, but does not exist.
+  class BLAST_BIN_DIR_NOT_FOUND < ENOENT
+    def initialize(ent)
+      super 'NCBI BLAST+ bin dir', ent
+    end
+  end
 
-rescue GeneValidatorApp::NO_BLAST_DATABASE_FOUND => e
-  unless list_databases? || list_unformatted_fastas? || make_blast_databases?
+  # Raised if bin dir set, but does not exist.
+  class MAFFT_BIN_DIR_NOT_FOUND < ENOENT
+    def initialize(ent)
+      super 'Mafft bin dir', ent
+    end
+  end
 
-    # Print error raised.
-    puts
-    puts e
+  # Raised if database dir set, but does not exist.
+  class DATABASE_DIR_NOT_FOUND < ENOENT
+    def initialize(ent)
+      super 'database dir', ent
+    end
+  end
 
-    # Offer user to format the FASTA files.
-    database_dir = GeneValidatorApp[:database_dir]
-    puts
-    puts <<MSG
-Search for FASTA files (.fa, .fasta, .fna) in '#{database_dir}' and try
-creating BLAST+ databases? [y/n] (Default: y).
+  # Raised if extension file set, but does not exist.
+  class EXTENSION_FILE_NOT_FOUND < ENOENT
+    def initialize(ent)
+      super 'extension file', ent
+    end
+  end
+
+  ## NUM THREADS ##
+
+  # Raised if num_threads set by the user is incorrect.
+  class NUM_THREADS_INCORRECT < StandardError
+    def to_s
+      <<MSG
+*** Error: Number of threads should be a number greater than or equal to 1.
+
 MSG
-    puts
-    print '>> '
-    response = STDIN.gets.to_s.strip
-    unless response.match(/^[n]$/i)
-      puts
-      puts 'Searching ...'
-      if GeneValidatorApp::Database.unformatted_fastas.empty?
-        puts "Couldn't find any FASTA files."
-        exit!
-      else
-        formatted = GeneValidatorApp::Database.make_blast_databases
-        exit! if formatted.empty? && !set?
-        retry unless set?
-      end
-    else
-      exit! unless set?
+    end
+  end
+
+  ## BLAST NOT INSTALLED OR NOT COMPATIBLE ##
+
+  # Raised if GeneValidatorApp could not locate NCBI BLAST+ installation on
+  # user's system.
+  class BLAST_NOT_INSTALLED < StandardError
+    def to_s
+      <<MSG
+*** Error: Could not locate BLAST+ binaries.
+
+MSG
+    end
+  end
+
+  # Raised if GeneValidatorApp determined NCBI BLAST+ present on the user's
+  # system but not meeting GeneValidatorApp's minimum version requirement.
+  class BLAST_NOT_COMPATIBLE < StandardError
+    def initialize(version)
+      @version  = version
+    end
+
+    attr_reader :version
+
+    def to_s
+      <<MSG
+*** Error: Your BLAST+ version #{version} is outdated.
+    GeneValidatorApp needs NCBI BLAST+ version #{MINIMUM_BLAST_VERSION} or higher.
+
+MSG
+    end
+  end
+
+  ## BLAST+ DATABASE RELATED ##
+
+  # Raised if 'database_dir' not set.
+  class DATABASE_DIR_NOT_SET < StandardError
+    def to_s
+      <<MSG
+*** Error: Database dir not set.
+
+MSG
+    end
+  end
+
+  # Raised if not even one BLAST+ database was found in database_dir.
+  class NO_BLAST_DATABASE_FOUND < StandardError
+    def initialize(database_dir)
+      @database_dir = database_dir
+    end
+
+    attr_reader :database_dir
+
+    def to_s
+      <<MSG
+*** Error: Could not find BLAST+ databases in: #{database_dir}.
+
+MSG
+    end
+  end
+
+  # Raised if there was an error determining BLAST+ databases in database_dir.
+  class BLAST_DATABASE_ERROR
+    def initialize(cmd, out)
+      @cmd = cmd
+      @out = out
+    end
+
+    attr_reader :cmd, :out
+
+    def to_s
+      <<MSG
+*** Error: There was an error in obtaining BLAST databases.
+    Tried: #{cmd}
+    Error:
+    #{out.strip}
+
+    Please could you report this by creating a Github Issue at
+    'https://github.com/IsmailM/GeneValidatorApp'?
+
+MSG
     end
   end
 end
-
-if opts.list_dbs?
-  puts 'Databases found:'
-  puts GeneValidatorApp::Database.all
-  exit
-end
-
-if opts.set? || opts.fetch_option(:set).value
-  GeneValidatorApp.config.write_config_file
-end
-
-GeneValidatorApp.run
