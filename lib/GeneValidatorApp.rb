@@ -68,7 +68,7 @@ module GeneValidatorApp
         puts '   Press CTRL+C to quit.'
         puts
         puts
-        open_up_browser(url)
+        open_default_browser(url)
         [:INT, :TERM].each do |sig|
           trap sig do
             server.stop!
@@ -109,16 +109,19 @@ module GeneValidatorApp
 
     private
 
-    def open_up_browser(url)
-      return if ENV['SSH_CLIENT'] || ENV['SSH_TTY'] || ENV['SSH_CONNECTION']
+    def open_default_browser(url)
+      return if using_ssh?
       if RUBY_PLATFORM =~ /linux/
-        return unless command?('xdg-open') || ENV['DISPLAY']
-        `xdg-open #{url}` # Linux
-      elsif RUBY_PLATFORM =~ /darwin/ # Mac
+        `xdg-open #{url}` unless command?('xdg-open') || ENV['DISPLAY']
+      elsif RUBY_PLATFORM =~ /darwin/
         `open #{url}`
       end
     end
 
+    def using_ssh?
+      true if ENV['SSH_CLIENT'] || ENV['SSH_TTY'] || ENV['SSH_CONNECTION']
+    end
+    
     def init_blast_and_mafft_binaries
       init_binaries(config[:blast_bin], 'BLAST')
       assert_blast_installed_and_compatible
