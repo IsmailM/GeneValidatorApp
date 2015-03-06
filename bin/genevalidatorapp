@@ -72,7 +72,8 @@ BNR
            'Start GeneValidatorApp in development mode'
            
   o.bool   '-v', '--version',
-           'Print version number of GeneValidatorApp that will be loaded' 
+           'Print version number of GeneValidatorApp ' \
+           ' that will be loaded' 
 
   o.on     '-h', '--help',
            'Display this help message'
@@ -100,15 +101,18 @@ trap('INT') do
   exit
 end
 
-clean_opts = lambda do |hash|
-  hash.delete_if { |k, v| k == :set || k == :version || v.nil? }
+clean_up_opts = lambda do |hash|
+  hash.delete_if { |k, v| k == :set || k == :version || k == :list_dbs ||
+                          v.nil? }
   hash
 end
+
+clean_opts = clean_up_opts[opts.to_hash]
 
 require 'GeneValidatorApp'
 require 'GeneValidatorApp/exceptions'
 begin
-  GeneValidatorApp.init clean_opts[opts.to_hash]
+  GeneValidatorApp.init clean_opts
 
 rescue GeneValidatorApp::CONFIG_FILE_ERROR => e
   puts e
@@ -172,7 +176,7 @@ rescue GeneValidatorApp::BLAST_NOT_INSTALLED,
 
   # Set a flag so that if we recovered from error resulting config can be
   # saved. Config will be saved unless invoked with -b option.
-  opts.fetch_option(:set).value = !bin?
+  clean_opts[:set] = !opts.bin?
 
   # Ask user if she already has BLAST+ downloaded or offer to download
   # BLAST+ for her.
@@ -229,14 +233,14 @@ ERR
       #{GeneValidatorApp::MINIMUM_BLAST_VERSION} or higher."
       exit!
     end
-    opts.fetch_option(:bin).value =
+    clean_opts[:bin] =
       "~/.genevalidatorapp/ncbi-blast-#{version}/bin/"
     retry
   else
     unless File.basename(response) == 'bin'
       response = File.join(response, 'bin')
     end
-    opts.fetch_option(:bin).value = File.join(response)
+    clean_opts[:bin] = File.join(response)
     puts
     retry
   end
@@ -248,7 +252,7 @@ rescue GeneValidatorApp::DATABASE_DIR_NOT_SET => e
 
   # Set a flag so that if we recovered from error resulting config can be
   # saved. Config will be saved unless invoked with -d option.
-  opts.fetch_option(:set).value = !database_dir?
+  clean_opts[:set] = !opts.database_dir?
 
   # Ask user for the directory containing sequences or BLAST+
   # databases.
@@ -262,7 +266,7 @@ MSG
 
   puts
   response = Readline.readline('>> ').to_s.strip
-  opts.fetch_option(:database_dir).value = response
+  clean_opts[:database_dir] = response
   retry
 
 rescue GeneValidatorApp::NO_BLAST_DATABASE_FOUND => e
@@ -290,11 +294,11 @@ MSG
         exit!
       else
         formatted = GeneValidatorApp::Database.make_blast_databases
-        exit! if formatted.empty? && !set?
-        retry unless set?
+        exit! if formatted.empty? && !opts.set?
+        retry unless opts.set?
       end
     else
-      exit! unless set?
+      exit! unless opts.set?
     end
   end
 end
@@ -305,7 +309,7 @@ if opts.list_dbs?
   exit
 end
 
-if opts.set? || opts.fetch_option(:set).value
+if opts.set? || clean_opts[:set]
   GeneValidatorApp.config.write_config_file
 end
 
