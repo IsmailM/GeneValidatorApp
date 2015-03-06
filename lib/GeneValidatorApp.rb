@@ -58,7 +58,7 @@ module GeneValidatorApp
       check_host
       url = "http://#{config[:host]}:#{config[:port]}"
       server = Thin::Server.new(config[:host], config[:port], signals: false) do
-        use Rack::CommonLogger
+        use Rack::CommonLogger if GeneValidatorApp.environment == 'development'
         run GeneValidatorApp
       end
       server.silent = true
@@ -66,6 +66,9 @@ module GeneValidatorApp
         puts '** GeneValidatorApp is ready.'
         puts "   Go to #{url} in your browser and start analysing Genes!"
         puts '   Press CTRL+C to quit.'
+        puts
+        puts
+        open_up_browser(url)
         [:INT, :TERM].each do |sig|
           trap sig do
             server.stop!
@@ -105,6 +108,13 @@ module GeneValidatorApp
     end
 
     private
+
+    def open_up_browser(url)
+      return if ENV['SSH_CLIENT'] || ENV['SSH_TTY'] || ENV['SSH_CONNECTION']
+      # Check if the mqachine has a GUI...
+      `open #{url}` if RUBY_PLATFORM =~ /darwin/ # Mac
+      `xdg-open #{url}` if RUBY_PLATFORM =~ /linux/ # Linux
+    end
 
     def init_blast_and_mafft_binaries
       init_binaries(config[:blast_bin], 'BLAST')

@@ -125,10 +125,32 @@ module GeneValidatorApp
       def write_seq_to_file
         @input_fasta_file = @gv_tmpdir + 'input_file.fa'
         logger.debug("Writing input seqs to: '#{@input_fasta_file}'")
+        ensure_fasta_valid
         File.open(@input_fasta_file, 'w+') do |f|
-          f.write(@params[:seq].to_fasta)
+          f.write(@params[:seq])
         end
         assert_input_file_present
+      end
+
+      # Adds a ID (based on the time when submitted) to sequences that are not in
+      #  fasta format.
+      def ensure_fasta_valid
+        logger.debug('Adding an ID to sequences that are not in fasta format.')
+        unique_queries = {}
+        sequence       = @params[:seq].lstrip
+        if sequence[0] != '>'
+          sequence.insert(0, ">Submitted:#{Time.now.strftime('%H:%M-%B_%d_%Y')}\n")
+        end
+        sequence.gsub!(/^\>(\S+)/) do |s|
+          if unique_queries.key?(s)
+            unique_queries[s] += 1
+            s + '_' + (unique_queries[s] - 1).to_s
+          else
+            unique_queries[s] = 1
+            s
+          end
+        end
+        @params[:seq] = sequence
       end
 
       # Asserts whether the input file has been generated and whether it is
@@ -143,23 +165,40 @@ module GeneValidatorApp
       # Returns 'blastp' if sequence contains amino acids or returns 'blastx'
       #   if it contains nucleic acids.
       def get_blast_type(sequences)
-        (sequences.sequence_type? == Bio::Sequence::AA) ? 'blastp' : 'blastx'
+        (check_seq_type(sequences) == Bio::Sequence::AA) ? 'blastp' : 'blastx'
+      end
+
+      def check_seq_type(sequences)
+        Bio::Sequence.new(Bio::FastaFormat.new(sequences).seq).guess(0.9)
       end
 
       # Runs GeneValidator
       def run_genevalidator
-        opts = {
+        opts = set_up_gv_opts
+        logger.debug("Running GeneValidator with options: #{opts.to_s}")
+        create_gv_log_file
+        original_stdout = $stdout.clone
+        $stdout.reopen(@gv_log_file, 'w')
+        (GeneValidator::Validation.new(opts)).run
+        $stdout = original_stdout
+        assert_table_output_file_produced
+      rescue SystemExit
+        raise RuntimeError, 'GeneValidator failed to run properly'
+      end
+
+      def set_up_gv_opts
+        {
           validations: @params[:validations],
           db: @db,
           num_threads: config[:num_threads],
           fast: true,
           input_fasta_file: @input_fasta_file.to_s
-          }
-        logger.debug("Running GeneValidator with options: #{opts.to_s}")
-        (GeneValidator::Validation.new(opts)).run
-        assert_table_output_file_produced
-      rescue SystemExit
-        raise RuntimeError, 'GeneValidator failed to run properly'
+        }
+      end
+
+      def create_gv_log_file
+        @gv_log_file = (@gv_tmpdir + 'log_file.txt').to_s
+        logger.debug("Log file: #{@gv_log_file}")
       end
 
       # Assets whether the results file is produced by GeneValidator.
@@ -188,40 +227,5 @@ module GeneValidatorApp
           "/GeneValidator/#{@unique_id}/input_file.fa.html/results.html"
       end
     end
-  end
-end
-
-#  Entending the String Class with a few useful functions.
-class String
-  extend Forwardable
-
-  def_delegators GeneValidatorApp, :logger
-
-  # Adds a ID (based on the time when submitted) to sequences that are not in
-  #  fasta format.
-  def to_fasta
-    logger.debug('Adding an ID to sequences that are not in fasta format.')
-    unique_queries = {}
-    sequence       = lstrip
-    if sequence[0] != '>'
-      sequence.insert(0, ">Submitted:#{Time.now.strftime('%H:%M-%B_%d_%Y')}\n")
-    end
-    sequence.gsub!(/^\>(\S+)/) do |s|
-      if unique_queries.key?(s)
-        unique_queries[s] += 1
-        s + '_' + (unique_queries[s] - 1).to_s
-      else
-        unique_queries[s] = 1
-        s
-      end
-    end
-    sequence
-  end
-
-  # Guesses the type of data based on the first sequence - (The app has
-  #   a javascript method that ensures that the all input sequences are
-  #   of the same method). This method is run from 'get_blast_type'
-  def sequence_type?
-    Bio::Sequence.new(Bio::FastaFormat.new(self).seq).guess(0.9)
   end
 end

@@ -1,5 +1,5 @@
 # GeneValidatorApp
-[![Build Status](https://travis-ci.org/IsmailM/GeneValidatorApp.svg?branch=alpha)](https://travis-ci.org/IsmailM/GeneValidatorApp)
+[![Build Status](https://travis-ci.org/IsmailM/GeneValidatorApp.svg?branch=master)](https://travis-ci.org/IsmailM/GeneValidatorApp)
 [![Gem Version](https://badge.fury.io/rb/GeneValidatorApp.svg)](http://badge.fury.io/rb/GeneValidatorApp)
 [![Dependency Status](https://gemnasium.com/IsmailM/GeneValidatorApp.svg)](https://gemnasium.com/IsmailM/GeneValidatorApp)
 [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/IsmailM/GeneValidatorApp/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/IsmailM/GeneValidatorApp/?branch=master)
