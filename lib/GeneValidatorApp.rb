@@ -67,7 +67,6 @@ module GeneValidatorApp
         puts "   Go to #{url} in your browser and start analysing Genes!"
         puts '   Press CTRL+C to quit.'
         puts
-        puts
         open_default_browser(url)
         [:INT, :TERM].each do |sig|
           trap sig do
