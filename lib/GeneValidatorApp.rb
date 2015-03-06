@@ -111,9 +111,12 @@ module GeneValidatorApp
 
     def open_up_browser(url)
       return if ENV['SSH_CLIENT'] || ENV['SSH_TTY'] || ENV['SSH_CONNECTION']
-      # Check if the mqachine has a GUI...
-      `open #{url}` if RUBY_PLATFORM =~ /darwin/ # Mac
-      `xdg-open #{url}` if RUBY_PLATFORM =~ /linux/ # Linux
+      if RUBY_PLATFORM =~ /linux/
+        return unless command?('xdg-open') || ENV['DISPLAY']
+        `xdg-open #{url}` # Linux
+      elsif RUBY_PLATFORM =~ /darwin/ # Mac
+        `open #{url}`
+      end
     end
 
     def init_blast_and_mafft_binaries
