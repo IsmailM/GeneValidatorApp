@@ -3,6 +3,7 @@
 [![Gem Version](https://badge.fury.io/rb/GeneValidatorApp.svg)](http://badge.fury.io/rb/GeneValidatorApp)
 [![Dependency Status](https://gemnasium.com/IsmailM/GeneValidatorApp.svg)](https://gemnasium.com/IsmailM/GeneValidatorApp)
 [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/IsmailM/GeneValidatorApp/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/IsmailM/GeneValidatorApp/?branch=master)
+[![total downloads](http://ruby-gem-downloads-badge.herokuapp.com/GeneValidatorApp?type=total&color=brightgreen)](https://rubygems.org/gems/GeneValidatorApp)
 
 This is a Sinatra based web wrapper for [GeneValidator](https://github.com/monicadragan/GeneValidator); a program that validates gene predictions. A working example can be seen at [genevalidator.sbcs.qmul.ac.uk](http://genevalidator.sbcs.qmul.ac.uk).
 
