@@ -43,39 +43,39 @@ BNR
   o.string '-c', '--config_file',
            'Use the given configuration file'
 
-  o.string '-r', '--require'
+  o.string '-r', '--require',
            'Load extension from this file'
 
   o.string '--host',
            'Host to run GeneValidatorApp on'
-  
-  o.string '-p', '--port'
+
+  o.string '-p', '--port',
            'Port to run GeneValidatorApp on'
-  
+
   o.string '-s', '--set',
            'Set configuration value in the config file'
-  
+
   o.string '-l', '--list_dbs',
            'List BLAST databases'
-  
+
   o.string '-b', '--blast_bin',
            'Load BLAST+ binaries from this directory'
-  
+
   o.string '-m', '--mafft_bin',
            'Load Mafft binaries from this directory'
-  
+
   o.string '-w', '--web_dir',
            'Path to the web directory (contains ' \
            'supporting files utilised by the app).'
 
-  o.bool   '-D', '--devel'
-           'Start GeneValidatorApp in development mode'
-           
-  o.bool   '-v', '--version',
-           'Print version number of GeneValidatorApp that will be loaded' 
+  o.bool '-D', '--devel',
+         'Start GeneValidatorApp in development mode'
 
-  o.on     '-h', '--help',
-           'Display this help message'
+  o.bool '-v', '--version',
+         'Print version number of GeneValidatorApp that will be loaded'
+
+  o.on '-h', '--help',
+       'Display this help message'
 end
 
 if opts.help?
@@ -115,12 +115,8 @@ rescue SystemExit => e
   exit e.status
 end
 
-if opts.list_databases?
-  puts GeneValidatorApp::Database.all?
-end
+puts GeneValidatorApp::Database.all? if opts.list_databases?
 
-if opts.set?
-  GeneValidatorApp.send :write_config_file
-end
+GeneValidatorApp.send(:write_config_file) if opts.set?
 
 GeneValidatorApp.run
